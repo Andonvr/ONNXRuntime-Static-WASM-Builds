@@ -1,4 +1,4 @@
-name: Test Build
+name: ONNX Runtime Static Wasm Build
 
 on:
   workflow_dispatch: # lets you run a build from github.com
