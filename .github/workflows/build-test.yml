@@ -1,0 +1,125 @@
+name: Test Build
+
+on:
+  workflow_dispatch: # lets you run a build from github.com
+  # Runs the workflow on push events but only for the develop branch
+  push:
+    # This is needed otherwise the github.ref is not set with ref/tags/v...
+    tags:
+      - 'v*.*.*'
+
+# When pushing new commits, cancel any running builds on that branch
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Required for creating releases
+
+jobs:
+  build-onnxruntime:
+    runs-on: ubuntu-latest
+    name: Build with emsdk version - ${{ matrix.emsdk_version }}
+    strategy:
+      fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
+      matrix:
+        emsdk_version:
+          [
+            '4.0.17',
+            '4.0.16',
+            '4.0.15',
+            '4.0.14',
+            '4.0.13',
+            '4.0.12',
+            '4.0.11',
+            '4.0.10',
+            '4.0.9',
+            '4.0.8',
+            '4.0.7',
+            '4.0.6',
+            '4.0.5',
+            '4.0.4',
+            '4.0.3',
+          ]
+
+    steps:
+      # With this we checkout to our repo
+      - name: get repo and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive' # This will checkout all submodules recursively
+          fetch-depth: 0 # Ensures full clone including tags and history
+
+      - name: Get the onnxruntime version
+        run: |
+          cd onnxruntime
+          TAG=$(git describe --tags --abbrev=0)
+          echo "ONNX Runtime Version: $TAG"
+          echo "ONNX_VERSION=$TAG" >> $GITHUB_ENV
+
+      - name: 'Build ONNX-Runtime'
+        shell: bash
+        run: |
+          cd onnxruntime/cmake/external/emsdk
+          git checkout tags/${{ matrix.emsdk_version }}
+          cd ../../../
+          ./build.sh \
+              --build_dir ./build \
+              --config Release \
+              --build_wasm_static_lib \
+              --enable_wasm_simd \
+              --enable_wasm_threads \
+              --compile_no_warning_as_error \
+              --skip_tests \
+              --disable_rtti \
+              --emsdk_version ${{ matrix.emsdk_version }} \
+              --skip_submodule_sync \
+              --cmake_extra_defines onnxruntime_BUILD_UNIT_TESTS=OFF \
+                                    CMAKE_CXX_FLAGS="-sNO_DISABLE_EXCEPTION_CATCHING -Wno-deprecated-literal-operator -Wno-dangling-capture"
+
+      # Declaring the product name and the packaging directory
+      - name: declare artefact variables
+        shell: bash
+        run: |
+          echo "PACKAGE_DIR=onnx-${{ env.ONNX_VERSION }}-emsdk-${{ matrix.emsdk_version}}" >> $GITHUB_ENV
+          echo "PRODUCT_NAME=onnx-${{ env.ONNX_VERSION }}-emsdk-${{ matrix.emsdk_version}}" >> $GITHUB_ENV
+
+      # Moving the build to a packaging directory
+      - name: move build
+        shell: bash
+        run: |
+          mkdir -p ${{ env.PACKAGE_DIR }}
+          cp onnxruntime/build/Release/libonnxruntime_webassembly.a ${{ env.PACKAGE_DIR }}/libonnxruntime_webassembly.a
+          cp onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h ${{ env.PACKAGE_DIR }}/onnxruntime_c_api.h
+          cp onnxruntime/include/onnxruntime/core/session/onnxruntime_cxx_api.h ${{ env.PACKAGE_DIR }}/onnxruntime_cxx_api.h
+          cp onnxruntime/include/onnxruntime/core/session/onnxruntime_cxx_inline.h ${{ env.PACKAGE_DIR }}/onnxruntime_cxx_inline.h
+          cp onnxruntime/include/onnxruntime/core/session/onnxruntime_float16.h ${{ env.PACKAGE_DIR }}/onnxruntime_float16.h
+          cp onnxruntime/LICENSE ${{ env.PACKAGE_DIR }}/LICENSE
+          cp onnxruntime/ThirdPartyNotices.txt ${{ env.PACKAGE_DIR }}/ThirdPartyNotices.txt
+
+      # Zip the artefact
+      - name: zip artefacts
+        shell: bash
+        run: |
+          zip -r ${{ env.PRODUCT_NAME }}.zip ${{ env.PACKAGE_DIR }}/
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PRODUCT_NAME }}.zip
+          path: ${{ env.PRODUCT_NAME }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    needs: build-onnxruntime
+
+    steps:
+      - name: Get Artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            */*.zip
