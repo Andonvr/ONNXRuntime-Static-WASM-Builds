@@ -52,10 +52,6 @@ jobs:
           TAG=$(git describe --tags --abbrev=0)
           echo "ONNX Runtime Version: $TAG"
           echo "ONNX_VERSION=$TAG" >> $GITHUB_ENV
-      - name: Replace eigen dependency with custom version (see https://github.com/microsoft/onnxruntime/pull/24884)
-        shell: bash
-        run: |
-          perl -pi -e 's#^eigen;.*#eigen;https://github.com/eigen-mirror/eigen/archive/1d8b82b0740839c0de7f1242a3585e3390ff5f33/eigen-1d8b82b0740839c0de7f1242a3585e3390ff5f33.zip\;05b19b49e6fbb91246be711d801160528c135e34#' onnxruntime/cmake/deps.txt
       - name: 'Build ONNX-Runtime'
         shell: bash
         run: |
@@ -73,7 +69,8 @@ jobs:
               --disable_rtti \
               --emsdk_version ${{ matrix.emsdk_version }} \
               --skip_submodule_sync \
-              --cmake_extra_defines CMAKE_CXX_FLAGS="-sNO_DISABLE_EXCEPTION_CATCHING -Wno-deprecated-literal-operator -Wno-dangling-capture"
+              --cmake_extra_defines onnxruntime_BUILD_UNIT_TESTS=OFF \
+                                    CMAKE_CXX_FLAGS="-sNO_DISABLE_EXCEPTION_CATCHING -Wno-deprecated-literal-operator -Wno-dangling-capture"
       # Declaring the product name and the packaging directory
       - name: declare artefact variables
         shell: bash
