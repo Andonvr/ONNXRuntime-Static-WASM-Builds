@@ -2,7 +2,10 @@
 
 Provides a static library build of the ONNX runtime, targeting WebAssembly.
 
-Builds are available in the [Releases](https://github.com/Andonvr/ONNXRuntime-Static-WASM-Builds/releases) section of this repository. Each version of ONNX Runtime is built for several versions of the Emscripten SDK (emsdk).
+Builds are available in the [Releases](https://github.com/Andonvr/ONNXRuntime-Static-WASM-Builds/releases) section of this repository.
+The releases are tagged as `emsdk-${emsdk_version}-onnx-${onnx_version}`.
+
+Not all possible combinations of Emscripten and ONNX Runtime versions are built, I update them sporadically. If you need a specific version combination, old or new, feel free to open an issue.
 
 These builds are not a one-size-fits-all solution, since certain flags are supplied during the build step. This was solely to match my needs, but chances are, this will work for you.
 
